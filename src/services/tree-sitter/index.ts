@@ -1,14 +1,156 @@
 import * as fs from "fs/promises"
 import * as path from "path"
-import { listFiles } from "@services/glob/list-files"
+import { listFiles } from "../glob/list-files"
 import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
-import { fileExistsAtPath } from "@utils/fs"
+import { fileExistsAtPath } from "../../utils/fs"
+import { parseMarkdown } from "./markdownParser"
 import { ClineIgnoreController } from "@core/ignore/ClineIgnoreController"
+import { QueryCapture } from "web-tree-sitter"
+
+// Private constant
+const DEFAULT_MIN_COMPONENT_LINES_VALUE = 4
+
+// Getter function for MIN_COMPONENT_LINES (for easier testing)
+let currentMinComponentLines = DEFAULT_MIN_COMPONENT_LINES_VALUE
+
+/**
+ * Get the current minimum number of lines for a component to be included
+ */
+export function getMinComponentLines(): number {
+	return currentMinComponentLines
+}
+
+/**
+ * Set the minimum number of lines for a component (for testing)
+ */
+export function setMinComponentLines(value: number): void {
+	currentMinComponentLines = value
+}
+
+const extensions = [
+	"tla",
+	"js",
+	"jsx",
+	"ts",
+	"vue",
+	"tsx",
+	"py",
+	// Rust
+	"rs",
+	"go",
+	// C
+	"c",
+	"h",
+	// C++
+	"cpp",
+	"hpp",
+	// C#
+	"cs",
+	// Ruby
+	"rb",
+	"java",
+	"php",
+	"swift",
+	// Solidity
+	"sol",
+	// Kotlin
+	"kt",
+	"kts",
+	// Elixir
+	"ex",
+	"exs",
+	// Elisp
+	"el",
+	// HTML
+	"html",
+	"htm",
+	// Markdown
+	"md",
+	"markdown",
+	// JSON
+	"json",
+	// CSS
+	"css",
+	// SystemRDL
+	"rdl",
+	// OCaml
+	"ml",
+	"mli",
+	// Lua
+	"lua",
+	// Scala
+	"scala",
+	// TOML
+	"toml",
+	// Zig
+	"zig",
+	// Elm
+	"elm",
+	// Embedded Template
+	"ejs",
+	"erb",
+].map((e) => `.${e}`)
+
+export { extensions }
+
+export async function parseSourceCodeDefinitionsForFile(
+	filePath: string,
+	rooIgnoreController?: ClineIgnoreController,
+): Promise<string | undefined> {
+	// check if the file exists
+	const fileExists = await fileExistsAtPath(path.resolve(filePath))
+	if (!fileExists) {
+		return "This file does not exist or you do not have permission to access it."
+	}
+
+	// Get file extension to determine parser
+	const ext = path.extname(filePath).toLowerCase()
+	// Check if the file extension is supported
+	if (!extensions.includes(ext)) {
+		return undefined
+	}
+
+	// Special case for markdown files
+	if (ext === ".md" || ext === ".markdown") {
+		// Check if we have permission to access this file
+		if (rooIgnoreController && !rooIgnoreController.validateAccess(filePath)) {
+			return undefined
+		}
+
+		// Read file content
+		const fileContent = await fs.readFile(filePath, "utf8")
+
+		// Split the file content into individual lines
+		const lines = fileContent.split("\n")
+
+		// Parse markdown content to get captures
+		const markdownCaptures = parseMarkdown(fileContent)
+
+		// Process the captures
+		const markdownDefinitions = processCaptures(markdownCaptures, lines, "markdown")
+
+		if (markdownDefinitions) {
+			return `# ${path.basename(filePath)}\n${markdownDefinitions}`
+		}
+		return undefined
+	}
+
+	// For other file types, load parser and use tree-sitter
+	const languageParsers = await loadRequiredLanguageParsers([filePath])
+
+	// Parse the file if we have a parser for it
+	const definitions = await parseFile(filePath, languageParsers, rooIgnoreController)
+	if (definitions) {
+		return `# ${path.basename(filePath)}\n${definitions}`
+	}
+
+	return undefined
+}
 
 // TODO: implement caching behavior to avoid having to keep analyzing project for new tasks.
 export async function parseSourceCodeForDefinitionsTopLevel(
 	dirPath: string,
-	clineIgnoreController?: ClineIgnoreController,
+	rooIgnoreController?: ClineIgnoreController,
 ): Promise<string> {
 	// check if the path exists
 	const dirExists = await fileExistsAtPath(path.resolve(dirPath))
@@ -22,71 +164,67 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 	let result = ""
 
 	// Separate files to parse and remaining files
-	const { filesToParse, remainingFiles } = separateFiles(allFiles)
-
-	const languageParsers = await loadRequiredLanguageParsers(filesToParse)
-
-	// Parse specific files we have language parsers for
-	// const filesWithoutDefinitions: string[] = []
+	const { filesToParse } = separateFiles(allFiles)
 
 	// Filter filepaths for access if controller is provided
-	const allowedFilesToParse = clineIgnoreController ? clineIgnoreController.filterPaths(filesToParse) : filesToParse
+	const allowedFilesToParse = rooIgnoreController ? rooIgnoreController.filterPaths(filesToParse) : filesToParse
 
-	for (const filePath of allowedFilesToParse) {
-		const definitions = await parseFile(filePath, languageParsers, clineIgnoreController)
-		if (definitions) {
-			result += `${path.relative(dirPath, filePath).toPosix()}\n${definitions}\n`
+	// Separate markdown files from other files
+	const markdownFiles: string[] = []
+	const otherFiles: string[] = []
+
+	for (const file of allowedFilesToParse) {
+		const ext = path.extname(file).toLowerCase()
+		if (ext === ".md" || ext === ".markdown") {
+			markdownFiles.push(file)
+		} else {
+			otherFiles.push(file)
 		}
-		// else {
-		// 	filesWithoutDefinitions.push(file)
-		// }
 	}
 
-	// List remaining files' paths
-	// let didFindUnparsedFiles = false
-	// filesWithoutDefinitions
-	// 	.concat(remainingFiles)
-	// 	.sort()
-	// 	.forEach((file) => {
-	// 		if (!didFindUnparsedFiles) {
-	// 			result += "# Unparsed Files\n\n"
-	// 			didFindUnparsedFiles = true
-	// 		}
-	// 		result += `${path.relative(dirPath, file)}\n`
-	// 	})
+	// Load language parsers only for non-markdown files
+	const languageParsers = await loadRequiredLanguageParsers(otherFiles)
+
+	// Process markdown files
+	for (const file of markdownFiles) {
+		// Check if we have permission to access this file
+		if (rooIgnoreController && !rooIgnoreController.validateAccess(file)) {
+			continue
+		}
+
+		try {
+			// Read file content
+			const fileContent = await fs.readFile(file, "utf8")
+
+			// Split the file content into individual lines
+			const lines = fileContent.split("\n")
+
+			// Parse markdown content to get captures
+			const markdownCaptures = parseMarkdown(fileContent)
+
+			// Process the captures
+			const markdownDefinitions = processCaptures(markdownCaptures, lines, "markdown")
+
+			if (markdownDefinitions) {
+				result += `# ${path.relative(dirPath, file).toPosix()}\n${markdownDefinitions}\n`
+			}
+		} catch (error) {
+			console.log(`Error parsing markdown file: ${error}\n`)
+		}
+	}
+
+	// Process other files using tree-sitter
+	for (const file of otherFiles) {
+		const definitions = await parseFile(file, languageParsers, rooIgnoreController)
+		if (definitions) {
+			result += `# ${path.relative(dirPath, file).toPosix()}\n${definitions}\n`
+		}
+	}
 
 	return result ? result : "No source code definitions found."
 }
 
-function separateFiles(allFiles: string[]): {
-	filesToParse: string[]
-	remainingFiles: string[]
-} {
-	const extensions = [
-		"js",
-		"jsx",
-		"ts",
-		"tsx",
-		"py",
-		// Rust
-		"rs",
-		"go",
-		// C
-		"c",
-		"h",
-		// C++
-		"cpp",
-		"hpp",
-		// C#
-		"cs",
-		// Ruby
-		"rb",
-		"java",
-		"php",
-		"swift",
-		// Kotlin
-		"kt",
-	].map((e) => `.${e}`)
+function separateFiles(allFiles: string[]): { filesToParse: string[]; remainingFiles: string[] } {
 	const filesToParse = allFiles.filter((file) => extensions.includes(path.extname(file))).slice(0, 50) // 50 files max
 	const remainingFiles = allFiles.filter((file) => !filesToParse.includes(file))
 	return { filesToParse, remainingFiles }
@@ -108,73 +246,168 @@ This approach allows us to focus on the most relevant parts of the code (defined
 - https://github.com/tree-sitter/tree-sitter/blob/master/lib/binding_web/test/helper.js
 - https://tree-sitter.github.io/tree-sitter/code-navigation-systems
 */
-async function parseFile(
-	filePath: string,
-	languageParsers: LanguageParser,
-	clineIgnoreController?: ClineIgnoreController,
-): Promise<string | null> {
-	if (clineIgnoreController && !clineIgnoreController.validateAccess(filePath)) {
-		return null
-	}
-	const fileContent = await fs.readFile(filePath, "utf8")
-	const ext = path.extname(filePath).toLowerCase().slice(1)
+/**
+ * Parse a file and extract code definitions using tree-sitter
+ *
+ * @param filePath - Path to the file to parse
+ * @param languageParsers - Map of language parsers
+ * @param rooIgnoreController - Optional controller to check file access permissions
+ * @returns A formatted string with code definitions or null if no definitions found
+ */
 
-	const { parser, query } = languageParsers[ext] || {}
-	if (!parser || !query) {
-		return `Unsupported file type: ${filePath}`
+/**
+ * Process captures from tree-sitter or markdown parser
+ *
+ * @param captures - The captures to process
+ * @param lines - The lines of the file
+ * @param minComponentLines - Minimum number of lines for a component to be included
+ * @returns A formatted string with definitions
+ */
+function processCaptures(captures: QueryCapture[], lines: string[], language: string): string | null {
+	// Determine if HTML filtering is needed for this language
+	const needsHtmlFiltering = ["jsx", "tsx"].includes(language)
+
+	// Filter function to exclude HTML elements if needed
+	const isNotHtmlElement = (line: string): boolean => {
+		if (!needsHtmlFiltering) return true
+		// Common HTML elements pattern
+		const HTML_ELEMENTS = /^[^A-Z]*<\/?(?:div|span|button|input|h[1-6]|p|a|img|ul|li|form)\b/
+		const trimmedLine = line.trim()
+		return !HTML_ELEMENTS.test(trimmedLine)
+	}
+
+	// No definitions found
+	if (captures.length === 0) {
+		return null
 	}
 
 	let formattedOutput = ""
 
+	// Sort captures by their start position
+	captures.sort((a, b) => a.node.startPosition.row - b.node.startPosition.row)
+
+	// Track already processed lines to avoid duplicates
+	const processedLines = new Set<string>()
+
+	// First pass - categorize captures by type
+	captures.forEach((capture) => {
+		const { node, name } = capture
+
+		// Skip captures that don't represent definitions
+		if (!name.includes("definition") && !name.includes("name")) {
+			return
+		}
+
+		// Get the parent node that contains the full definition
+		const definitionNode = name.includes("name") ? node.parent : node
+		if (!definitionNode) return
+
+		// Get the start and end lines of the full definition
+		const startLine = definitionNode.startPosition.row
+		const endLine = definitionNode.endPosition.row
+		const lineCount = endLine - startLine + 1
+
+		// Skip components that don't span enough lines
+		if (lineCount < getMinComponentLines()) {
+			return
+		}
+
+		// Create unique key for this definition based on line range
+		// This ensures we don't output the same line range multiple times
+		const lineKey = `${startLine}-${endLine}`
+
+		// Skip already processed lines
+		if (processedLines.has(lineKey)) {
+			return
+		}
+
+		// Check if this is a valid component definition (not an HTML element)
+		const startLineContent = lines[startLine].trim()
+
+		// Special handling for component name definitions
+		if (name.includes("name.definition")) {
+			// Extract component name
+			const componentName = node.text
+
+			// Add component name to output regardless of HTML filtering
+			if (!processedLines.has(lineKey) && componentName) {
+				formattedOutput += `${startLine + 1}--${endLine + 1} | ${lines[startLine]}\n`
+				processedLines.add(lineKey)
+			}
+		}
+		// For other component definitions
+		else if (isNotHtmlElement(startLineContent)) {
+			formattedOutput += `${startLine + 1}--${endLine + 1} | ${lines[startLine]}\n`
+			processedLines.add(lineKey)
+
+			// If this is part of a larger definition, include its non-HTML context
+			if (node.parent && node.parent.lastChild) {
+				const contextEnd = node.parent.lastChild.endPosition.row
+				const contextSpan = contextEnd - node.parent.startPosition.row + 1
+
+				// Only include context if it spans multiple lines
+				if (contextSpan >= getMinComponentLines()) {
+					// Add the full range first
+					const rangeKey = `${node.parent.startPosition.row}-${contextEnd}`
+					if (!processedLines.has(rangeKey)) {
+						formattedOutput += `${node.parent.startPosition.row + 1}--${contextEnd + 1} | ${lines[node.parent.startPosition.row]}\n`
+						processedLines.add(rangeKey)
+					}
+				}
+			}
+		}
+	})
+
+	if (formattedOutput.length > 0) {
+		return formattedOutput
+	}
+
+	return null
+}
+
+/**
+ * Parse a file and extract code definitions using tree-sitter
+ *
+ * @param filePath - Path to the file to parse
+ * @param languageParsers - Map of language parsers
+ * @param rooIgnoreController - Optional controller to check file access permissions
+ * @returns A formatted string with code definitions or null if no definitions found
+ */
+async function parseFile(
+	filePath: string,
+	languageParsers: LanguageParser,
+	rooIgnoreController?: ClineIgnoreController,
+): Promise<string | null> {
+	// Check if we have permission to access this file
+	if (rooIgnoreController && !rooIgnoreController.validateAccess(filePath)) {
+		return null
+	}
+
+	// Read file content
+	const fileContent = await fs.readFile(filePath, "utf8")
+	const extLang = path.extname(filePath).toLowerCase().slice(1)
+
+	// Check if we have a parser for this file type
+	const { parser, query } = languageParsers[extLang] || {}
+	if (!parser || !query) {
+		return `Unsupported file type: ${filePath}`
+	}
+
 	try {
-		// Parse the file content into an Abstract Syntax Tree (AST), a tree-like representation of the code
+		// Parse the file content into an Abstract Syntax Tree (AST)
 		const tree = parser.parse(fileContent)
 
 		// Apply the query to the AST and get the captures
-		// Captures are specific parts of the AST that match our query patterns, each capture represents a node in the AST that we're interested in.
-		const captures = query.captures(tree.rootNode)
-
-		// Sort captures by their start position
-		captures.sort((a, b) => a.node.startPosition.row - b.node.startPosition.row)
+		const captures = tree ? query.captures(tree.rootNode) : []
 
 		// Split the file content into individual lines
 		const lines = fileContent.split("\n")
 
-		// Keep track of the last line we've processed
-		let lastLine = -1
-
-		captures.forEach((capture) => {
-			const { node, name } = capture
-			// Get the start and end lines of the current AST node
-			const startLine = node.startPosition.row
-			const endLine = node.endPosition.row
-			// Once we've retrieved the nodes we care about through the language query, we filter for lines with definition names only.
-			// name.startsWith("name.reference.") > refs can be used for ranking purposes, but we don't need them for the output
-			// previously we did `name.startsWith("name.definition.")` but this was too strict and excluded some relevant definitions
-
-			// Add separator if there's a gap between captures
-			if (lastLine !== -1 && startLine > lastLine + 1) {
-				formattedOutput += "|----\n"
-			}
-			// Only add the first line of the definition
-			// query captures includes the definition name and the definition implementation, but we only want the name (I found discrepancies in the naming structure for various languages, i.e. javascript names would be 'name' and typescript names would be 'name.definition)
-			if (name.includes("name") && lines[startLine]) {
-				formattedOutput += `│${lines[startLine]}\n`
-			}
-			// Adds all the captured lines
-			// for (let i = startLine; i <= endLine; i++) {
-			// 	formattedOutput += `│${lines[i]}\n`
-			// }
-			//}
-
-			lastLine = endLine
-		})
+		// Process the captures
+		return processCaptures(captures, lines, extLang)
 	} catch (error) {
 		console.log(`Error parsing file: ${error}\n`)
+		// Return null on parsing error to avoid showing error messages in the output
+		return null
 	}
-
-	if (formattedOutput.length > 0) {
-		return `|----\n${formattedOutput}|----\n`
-	}
-	return null
 }

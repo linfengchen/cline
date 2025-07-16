@@ -8,7 +8,7 @@ export class CompletionManager implements vscode.Disposable {
 	private outputChannel: vscode.OutputChannel
 
 	constructor(context: vscode.ExtensionContext) {
-		this.outputChannel = vscode.window.createOutputChannel("Cline智能补全管理器")
+		this.outputChannel = vscode.window.createOutputChannel("Cline")
 		this.outputChannel.appendLine("🎯 Cline 智能补全：开始初始化 CompletionManager")
 
 		this.provider = new InlineCompletionProvider(context)

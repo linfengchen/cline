@@ -36,6 +36,7 @@ import { vscodeHostBridgeClient } from "@/hosts/vscode/client/host-grpc-client"
 import { VscodeWebviewProvider } from "./core/webview/VscodeWebviewProvider"
 import { ExtensionContext } from "vscode"
 import { AuthService } from "./services/auth/AuthService"
+import { registerAutocomplete } from "./services/autocomplete/AutocompleteProvider"
 import { writeTextToClipboard, readTextFromClipboard } from "@/utils/env"
 import { CompletionManager } from "./core/completion/CompletionManager"
 
@@ -89,8 +90,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Initialize completion manager
 	outputChannel.appendLine("🎯 Cline 扩展：开始初始化智能补全功能")
-	completionManager = new CompletionManager(context)
-	context.subscriptions.push(completionManager)
+	registerAutocomplete(context)
 	outputChannel.appendLine("✅ Cline 扩展：智能补全功能初始化完成")
 
 	vscode.commands.executeCommand("setContext", "cline.isDevMode", IS_DEV && IS_DEV === "true")
@@ -188,7 +188,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	)
 
 	const openClineInNewTab = async () => {
-		Logger.log("Opening Cline in new tab")
+		Logger.log("Opening StepCline in new tab")
 		// (this example uses webviewProvider activation event which is necessary to deserialize cached webview, but since we use retainContextWhenHidden, we don't need to use that event)
 		// https://github.com/microsoft/vscode-extension-samples/blob/main/webview-sample/src/extension.ts
 		const tabWebview = hostProviders.createWebviewProvider(WebviewProviderType.TAB)
@@ -676,7 +676,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				await controller.generateGitCommitMessage()
 			} else {
 				// Create a temporary controller just for this operation
-				const outputChannel = vscode.window.createOutputChannel("Cline Commit Generator")
+				const outputChannel = vscode.window.createOutputChannel("Cline")
 				const tempController = new Controller(context, outputChannel, () => Promise.resolve(true), uuidv4())
 
 				await tempController.generateGitCommitMessage()
@@ -717,12 +717,6 @@ export async function deactivate() {
 	// Clean up test mode
 	cleanupTestMode()
 	await posthogClientProvider.shutdown()
-
-	// Dispose completion manager
-	if (completionManager) {
-		outputChannel.appendLine("🛑 Cline 扩展：正在销毁智能补全功能")
-		completionManager.dispose()
-	}
 
 	Logger.log("Cline extension deactivated")
 }
