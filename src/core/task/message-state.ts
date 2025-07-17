@@ -79,7 +79,7 @@ export class MessageStateHandler {
 			try {
 				// getFolderSize.loose silently ignores errors
 				// returns # of bytes, size/1000/1000 = MB
-				taskDirSize = await getFolderSize.loose(taskDir)
+				taskDirSize = await getFolderSize.strict(taskDir)
 			} catch (error) {
 				console.error("Failed to get task directory size:", taskDir, error)
 			}

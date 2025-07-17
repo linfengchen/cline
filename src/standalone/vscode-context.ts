@@ -11,7 +11,7 @@ import { EnvironmentVariableCollection, MementoStore, readJson, SecretStore } fr
 const VERSION = getPackageVersion()
 log("Running standalone cline ", VERSION)
 
-const CLINE_DIR = process.env.CLINE_DIR || `${os.homedir()}/.cline`
+const CLINE_DIR = process.env.CLINE_DIR || `${os.homedir()}/.stepcline`
 const DATA_DIR = path.join(CLINE_DIR, "data")
 mkdirSync(DATA_DIR, { recursive: true })
 log("Using settings dir:", DATA_DIR)
@@ -20,7 +20,7 @@ const EXTENSION_DIR = path.join(CLINE_DIR, "core", VERSION, "extension")
 const EXTENSION_MODE = process.env.IS_DEV === "true" ? ExtensionMode.Development : ExtensionMode.Production
 
 const extension: Extension<void> = {
-	id: "saoudrizwan.claude-dev",
+	id: "stepcline",
 	isActive: true,
 	extensionPath: EXTENSION_DIR,
 	extensionUri: URI.file(EXTENSION_DIR),

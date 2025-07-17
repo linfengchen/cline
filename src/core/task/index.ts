@@ -487,7 +487,6 @@ export class Task {
 			return
 		}
 
-		console.log("presentMultifileDiff", messageTs)
 		const clineMessages = this.messageStateHandler.getClineMessages()
 		const messageIndex = clineMessages.findIndex((m) => m.ts === messageTs)
 		const message = clineMessages[messageIndex]
@@ -1645,7 +1644,6 @@ export class Task {
 		}
 
 		let stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory)
-
 		const iterator = stream[Symbol.asyncIterator]()
 
 		try {

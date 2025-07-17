@@ -1,5 +1,5 @@
 {
-	"name": "claude-dev",
+	"name": "dev",
 	"displayName": "StepCline",
 	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
 	"version": "0.0.1",
@@ -11,7 +11,7 @@
 		"name": "StepCline Bot Inc."
 	},
 	"license": "Apache-2.0",
-	"publisher": "saoudrizwan",
+	"publisher": "stepcline",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cline/cline"
@@ -380,6 +380,7 @@
 		"@typescript-eslint/utils": "^8.33.0",
 		"@vscode/test-cli": "^0.0.10",
 		"@vscode/test-electron": "^2.4.1",
+		"babel-plugin-dynamic-import-webpack": "^1.1.0",
 		"chai": "^4.3.10",
 		"chalk": "^5.3.0",
 		"esbuild": "^0.25.0",

@@ -206,21 +206,21 @@ export class ContextGatherer {
 		// More sophisticated merging can be added later if needed.
 		try {
 			const content = await this._readRangeInFile(uri, range)
-			if (!content.trim()) return // Don't add empty edits
+			if (content.trim()) {
+				const newEntry: RecentlyEditedRangeInternal = {
+					uri,
+					range,
+					timestamp,
+					content,
+				}
 
-			const newEntry: RecentlyEditedRangeInternal = {
-				uri,
-				range,
-				timestamp,
-				content,
-			}
+				// Remove existing entry for the same file to avoid too many from one file
+				this.recentlyEditedRanges = this.recentlyEditedRanges.filter((r) => r.uri.toString() !== uri.toString())
 
-			// Remove existing entry for the same file to avoid too many from one file
-			this.recentlyEditedRanges = this.recentlyEditedRanges.filter((r) => r.uri.toString() !== uri.toString())
-
-			this.recentlyEditedRanges.unshift(newEntry)
-			if (this.recentlyEditedRanges.length > ContextGatherer.MAX_RECENTLY_EDITED_RANGES) {
-				this.recentlyEditedRanges = this.recentlyEditedRanges.slice(0, ContextGatherer.MAX_RECENTLY_EDITED_RANGES)
+				this.recentlyEditedRanges.unshift(newEntry)
+				if (this.recentlyEditedRanges.length > ContextGatherer.MAX_RECENTLY_EDITED_RANGES) {
+					this.recentlyEditedRanges = this.recentlyEditedRanges.slice(0, ContextGatherer.MAX_RECENTLY_EDITED_RANGES)
+				}
 			}
 		} catch (e) {
 			console.warn(`[ContextGatherer] Error inserting recently edited range:`, e)

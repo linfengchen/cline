@@ -1,7 +1,7 @@
 // kilocode_change new file
 
 import * as vscode from "vscode"
-import { buildApiHandler, ApiHandler } from "../../api"
+import { StepfunHandler } from "../../api/providers/stepfun"
 import { CodeContext, ContextGatherer } from "./ContextGatherer"
 import { createDebouncedFn } from "./utils/createDebouncedFn"
 import { AutocompleteDecorationAnimation } from "./AutocompleteDecorationAnimation"
@@ -13,7 +13,7 @@ import { processTextInsertion } from "./utils/CompletionTextProcessor"
 import { AutocompleteStatusBar } from "./AutocompleteStatusBar"
 import { getAllExtensionState } from "../../core/storage/state"
 
-export const UI_UPDATE_DEBOUNCE_MS = 600
+export const UI_UPDATE_DEBOUNCE_MS = 300
 export const BAIL_OUT_TOO_MANY_LINES_LIMIT = 500
 export const MAX_COMPLETIONS_PER_CONTEXT = 10 // Per-given prefix/suffix lines, how many different per-line options to cache
 
@@ -69,7 +69,7 @@ function setupAutocomplete(context: vscode.ExtensionContext): vscode.Disposable 
 	let lastCompletionCost = 0
 	let totalSessionCost = 0
 
-	let apiHandler: ApiHandler | null = null
+	let apiHandler: StepfunHandler | null = null
 	const autocompleteCache = new AutocompleteCache()
 	const contextGatherer = new ContextGatherer()
 	const animationManager = AutocompleteDecorationAnimation.getInstance()
@@ -95,7 +95,8 @@ function setupAutocomplete(context: vscode.ExtensionContext): vscode.Disposable 
 				return
 			}
 			// Build API handler
-			apiHandler = buildApiHandler(apiConfiguration)
+			apiHandler = new StepfunHandler(apiConfiguration)
+			apiHandler.setAutoCompleteModel("step-2-mini")
 		} catch (error) {
 			console.warn("Failed to update autocomplete API handler:", error)
 			apiHandler = null
@@ -125,7 +126,7 @@ function setupAutocomplete(context: vscode.ExtensionContext): vscode.Disposable 
 
 		const requestId = crypto.randomUUID()
 		activeRequestId = requestId
-		animationManager.startAnimation()
+		// animationManager.startAnimation()
 
 		const { systemPrompt, userPrompt } = holeFillerStrategy.getCompletionPrompts(document, position, codeContext)
 
@@ -168,7 +169,7 @@ function setupAutocomplete(context: vscode.ExtensionContext): vscode.Disposable 
 		updateStatusBar()
 
 		if (activeRequestId === requestId) {
-			animationManager.stopAnimation()
+			// animationManager.stopAnimation()
 		}
 
 		return { processedCompletion, lineCount, cost: completionCost }

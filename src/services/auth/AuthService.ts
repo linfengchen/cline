@@ -185,7 +185,7 @@ export class AuthService {
 
 			const uriScheme = vscode.env.uriScheme
 			const authUrl = vscode.Uri.parse(
-				`${this._config.URI}?state=${encodeURIComponent(this._authNonce)}&callback_url=${encodeURIComponent(`${uriScheme || "vscode"}://saoudrizwan.claude-dev/auth`)}`,
+				`${this._config.URI}?state=${encodeURIComponent(this._authNonce)}&callback_url=${encodeURIComponent(`${uriScheme || "vscode"}://stepcline/auth`)}`,
 			)
 			await vscode.env.openExternal(authUrl)
 			return String.create({

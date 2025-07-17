@@ -1,6 +1,6 @@
 import * as vscode from "vscode"
 
-export const UI_SHOW_LOADING_DELAY_MS = 150
+export const UI_SHOW_LOADING_DELAY_MS = 200
 
 /**
  * Manages the animated decoration for autocomplete loading indicator
@@ -101,28 +101,28 @@ export class AutocompleteDecorationAnimation {
 		// Animation with two phases:
 		// 1. Typing out "KILO" (block moves to the right) - faster (100ms)
 		// 2. Blinking block at the end when fully spelled - slower (200ms)
-		if (this.animationState < this.animationFrames.length - 1) {
-			// Phase 1: Spell out "KILO" with block cursor
-			this.animationState++
-		} else {
-			// Check if we just reached the end of typing phase
-			if (this.isTypingPhase) {
-				// Transition from typing to blinking phase
-				this.isTypingPhase = false
+		// if (this.animationState < this.animationFrames.length - 1) {
+		// 	// Phase 1: Spell out "KILO" with block cursor
+		// 	this.animationState++
+		// } else {
+		// Check if we just reached the end of typing phase
+		if (this.isTypingPhase) {
+			// Transition from typing to blinking phase
+			this.isTypingPhase = false
 
-				// Clear current interval and create a new one with slower timing (200ms)
-				if (this.animationInterval) {
-					clearInterval(this.animationInterval)
-				}
-
-				this.animationInterval = setInterval(() => {
-					this.updateAnimation()
-				}, 200)
+			// Clear current interval and create a new one with slower timing (200ms)
+			if (this.animationInterval) {
+				clearInterval(this.animationInterval)
 			}
 
-			// Phase 2: Blink the block cursor at the end
-			this.isBlockVisible = !this.isBlockVisible
+			this.animationInterval = setInterval(() => {
+				this.updateAnimation()
+			}, 300)
 		}
+
+		// Phase 2: Blink the block cursor at the end
+		this.isBlockVisible = !this.isBlockVisible
+		// }
 
 		this.updateDecorationText()
 	}
@@ -131,17 +131,19 @@ export class AutocompleteDecorationAnimation {
 	 * Updates the decoration text based on current animation state
 	 */
 	private updateDecorationText(): void {
-		if (!this.editor || !this.range) return
+		if (!this.editor || !this.range) {
+			return
+		}
 
 		let text = ""
 		// When fully spelled and in blinking mode
-		if (this.animationState === this.animationFrames.length - 1) {
-			// Show either the full frame with block, or just "KILO" without block
-			text = this.isBlockVisible ? this.animationFrames[this.animationState] : ""
-		} else {
-			// Normal animation frames (with block)
-			text = this.animationFrames[this.animationState]
-		}
+		// if (this.animationState === this.animationFrames.length - 1) {
+		// 	// Show either the full frame with block, or just "KILO" without block
+		// 	text = this.isBlockVisible ? this.animationFrames[this.animationState] : ""
+		// } else {
+		// 	// Normal animation frames (with block)
+		// 	text = this.animationFrames[this.animationState]
+		// }
 
 		if (text.length > 0) {
 			// Update decoration type with new text

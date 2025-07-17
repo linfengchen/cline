@@ -191,5 +191,5 @@ export function normalizeApiConfiguration(apiConfiguration?: ApiConfiguration): 
  * Gets the OpenRouter authentication URL
  */
 export function getOpenRouterAuthUrl(uriScheme?: string) {
-	return `https://openrouter.ai/auth?callback_url=${uriScheme || "vscode"}://saoudrizwan.claude-dev/openrouter`
+	return `https://openrouter.ai/auth?callback_url=${uriScheme || "vscode"}://stepcline/openrouter`
 }

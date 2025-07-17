@@ -103,6 +103,7 @@ export interface ApiHandlerOptions {
 	sapAiCoreTokenUrl?: string
 	sapAiCoreBaseUrl?: string
 	sapAiCoreModelId?: string
+	autoCompletionModelId?: string
 	onRetryAttempt?: (attempt: number, maxRetries: number, delay: number, error: any) => void
 }
 

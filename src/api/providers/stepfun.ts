@@ -11,6 +11,7 @@ import { convertToR1Format } from "../transform/r1-format"
 export class StepfunHandler implements ApiHandler {
 	private options: ApiHandlerOptions
 	private client: OpenAI | undefined
+	private autoID: string | undefined
 
 	constructor(options: ApiHandlerOptions) {
 		this.options = options
@@ -35,9 +36,8 @@ export class StepfunHandler implements ApiHandler {
 
 	@withRetry()
 	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): ApiStream {
-		const client = this.ensureClient()
 		const model = this.getModel()
-
+		const client = this.ensureClient()
 		const isDeepseekReasoner = model.id.startsWith("step-ds")
 
 		let openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -96,14 +96,24 @@ export class StepfunHandler implements ApiHandler {
 	}
 
 	getModel(): { id: StepFunModelId; info: ModelInfo } {
+		if (this.autoID && this.autoID in stepFunModels) {
+			const id = this.autoID as StepFunModelId
+			return { id, info: stepFunModels[id] }
+		}
+
 		const modelId = this.options.apiModelId
 		if (modelId && modelId in stepFunModels) {
 			const id = modelId as StepFunModelId
 			return { id, info: stepFunModels[id] }
 		}
+
 		return {
 			id: stepFunDefaultModelId,
 			info: stepFunModels[stepFunDefaultModelId],
 		}
+	}
+
+	setAutoCompleteModel(id: string) {
+		this.autoID = id
 	}
 }
